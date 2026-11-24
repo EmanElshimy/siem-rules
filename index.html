@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SIEM Detection Rules Catalog | Elastic & Multi-Platform</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>SIEM Detection Rules Catalog</h1>
+      <p class="subtitle">Ready-to-use detection rules for Elastic Security, Splunk, and other SIEM platforms. Mapped to MITRE ATT&CK with sample results.</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="controls">
+      <input type="text" id="search" placeholder="Search rules by name, MITRE, category, or platform..." />
+      <select id="category-filter">
+        <option value="">All Categories</option>
+        <option value="Authentication">Authentication</option>
+        <option value="Execution">Execution</option>
+        <option value="Credential Access">Credential Access</option>
+        <option value="Impact">Impact</option>
+        <option value="Persistence">Persistence</option>
+        <option value="Lateral Movement">Lateral Movement</option>
+        <option value="Privilege Escalation">Privilege Escalation</option>
+        <option value="Initial Access">Initial Access</option>
+        <option value="Command and Control">Command and Control</option>
+        <option value="Exfiltration">Exfiltration</option>
+        <option value="Defense Evasion">Defense Evasion</option>
+      </select>
+      <select id="platform-filter">
+        <option value="">All Platforms</option>
+        <option value="Windows">Windows</option>
+        <option value="Linux">Linux</option>
+        <option value="AWS">AWS</option>
+        <option value="Identity">Identity</option>
+        <option value="Network">Network</option>
+        <option value="Endpoint">Endpoint</option>
+      </select>
+    </div>
+
+    <div id="rules-list" class="rules-grid"></div>
+    <div id="rule-detail" class="rule-detail hidden"></div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>Open-source catalog of SIEM detection rules. Deploy to GitHub Pages for a public link. Rules are examples — always validate and tune in your environment.</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
